@@ -1,4 +1,5 @@
-create function expl(q text) returns setof text as $$
+create function expl(q text) returns 
+setof text as $$
 declare r record;
 begin
 	for r in execute 'explain ' || q loop
