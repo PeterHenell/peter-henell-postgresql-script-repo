@@ -1,0 +1,58 @@
+Centos based on http://www.postgresonline.com/journal/archives/203-postgresql90-yum.html
+
+## using virtual machine, configure network to be:
+Bridged Adapter
+
+#SSH into the machine using root, run this to allow your regular user to do "sudo"
+echo 'peter.henell ALL=(ALL) ALL' >> /etc/sudoers
+
+sudo yum install http://yum.postgresql.org/9.3/redhat/rhel-6-x86_64/pgdg-redhat93-9.3-1.noarch.rpm
+
+sudo yum install postgresql93-server postgresql93-contrib
+sudo service postgresql-9.3 initdb
+sudo chkconfig postgresql-9.3 on
+sudo service postgresql-9.3 start
+
+
+-- to change postgres user password
+sudo -u postgres psql
+ALTER USER postgres PASSWORD 'newpassword';
+\password postgres
+create extension adminpack;
+\q
+
+
+sudo emacs /var/lib/pgsql/9.3/data/postgresql.conf
+## modify listen-address to '*'
+#save file
+
+sudo emacs /var/lib/pgsql/9.3/data/pg_hba.conf
+## add line
+host all all  0.0.0.0/0   md5
+#save file
+
+sudo service postgresql-9.3 stop
+sudo service postgresql-9.3 start
+
+# probably need to shutdown firewall to test it
+sudo service iptables stop
+
+# server is now available from remote, possible to user pgAdmin :)
+
+
+## the firewall should be used. Put the rule before the last REJECT rule
+## position 5 for me was the REJECT ALL rule, so I put my rule at nr 4
+sudo service iptables start
+sudo iptables -I INPUT 4 -p tcp --dport 5432:5434 -j ACCEPT
+
+
+## 
+sudo -u postgres psql
+ create extension pageinspect;
+ 
+## read some stuff from the source according to the documentation
+ wget http://ftp.postgresql.org/pub/source/v9.3.3/postgresql-9.3.3.tar.gz
+ tar -xvzf postgresql-9.3.3.tar.gz
+ cd postgresql-9.3.3
+
+ 
