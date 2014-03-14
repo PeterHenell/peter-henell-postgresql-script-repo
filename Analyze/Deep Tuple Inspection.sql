@@ -17,14 +17,14 @@
 	select 32768 ,  'Moved by VACUUM FULL (pre 9.0)' --   union all
 --	select 65520 ,  'visibility-related bits'  
 ),
-infomask2(bitmask, description) as (
+bitmap_infomask2(bitmask, description) as (
 
-	select 0x07FF  /* 11 bits for number of attributes */
+	select 2047, '11 bits for number of attributes'    union all /* 11 bits for number of attributes */
 	/* bits 0x1800 are available */
-	select 0x2000  /* tuple was updated and key cols											 * modified, or tuple deleted */
-	select 0x4000  /* tuple was HOT-updated */
-	select 0x8000  /* this is heap-only tuple */
-	select 0xE000  /* visibility-related bits */
+	select 8192,'tuple was updated and key cols modified, or tuple deleted'    union all /* tuple was updated and key cols modified, or tuple deleted */
+	select 16384,'tuple was HOT-updated'    union all /* tuple was HOT-updated */
+	select 32768,'this is heap-only tuple'   --union all /* this is heap-only tuple */
+	--select 57344,'visibility-related bits'  /* visibility-related bits */
 )
 select
 	lp as "Item Pointer",
@@ -45,16 +45,20 @@ select
 	t_infomask2,				/* number of attributes + various flags */
 	t_infomask,
 	mask.description as "flag bits",
-		
+	mask2.description as "flag bits2",	
 	t_hoff as "Size of header",		/* sizeof header incl. bitmap, padding */
 	t_bits as "NULL Bitmap",		/* bitmap of NULLs -- VARIABLE LENGTH */
 	t_oid
 					
 
-FROM heap_page_items(get_raw_page('t1', 0))
+FROM heap_page_items(get_raw_page('customers', 0))
 CROSS JOIN LATERAL (
 	SELECT string_agg(description, ', ') 
 	FROM bitmap_infomask 
 	WHERE t_infomask & bitmask > 0
 ) mask (description)
-
+CROSS JOIN LATERAL (
+	SELECT string_agg(description, ', ') 
+	FROM bitmap_infomask2 
+	WHERE t_infomask2 & bitmask > 0
+) mask2 (description)
