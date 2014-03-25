@@ -1,0 +1,12 @@
+1) Turn on the HTML output option - 
+newgendb=# \H 
+Output format is html. 
+
+2) Direct the output to a file 
+
+newgendb=# \o myfile.html 
+
+3) Execute the select 
+
+4) Turn off output 
+newgendb=# \o 
