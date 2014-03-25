@@ -1,23 +1,27 @@
-﻿﻿/*
-        Copyright 2014 Peter Henell
+﻿-- Copyright 2014 Peter Henell
+-- 
+-- Licensed under the Apache License, Version 2.0 (the "License");
+-- you may not use this file except in compliance with the License.
+-- You may obtain a copy of the License at
+-- 
+--     http://www.apache.org/licenses/LICENSE-2.0
+-- 
+-- Unless required by applicable law or agreed to in writing, software
+-- distributed under the License is distributed on an "AS IS" BASIS,
+-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-- See the License for the specific language governing permissions and
+-- limitations under the License.
 
-        Licensed under the Apache License, Version 2.0 (the "License");
-        you may not use this file except in compliance with the License.
-        You may obtain a copy of the License at
 
-                http://www.apache.org/licenses/LICENSE-2.0
-
-        Unless required by applicable law or agreed to in writing, software
-        distributed under the License is distributed on an "AS $$ IS" BASIS,
-        WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-        See the License for the specific language governing permissions and
-        limitations under the License.
-
-*/
 
 drop schema IF EXISTS pgSQLt cascade;
 
 create schema pgSQLt;
+
+create table pgsqlt.test_class(
+	class_id serial primary key,
+	name text
+);
 
 create function pgSQLt.NewTestClass(className text)
 returns void
@@ -30,56 +34,111 @@ begin
 	EXECUTE (sql);
 	sql := 'CREATE SCHEMA ' || className;
 	EXECUTE (sql);
+	insert into pgsqlt.test_class (name) values(className);
 	
 end $$ language plpgsql;
 
 
-CREATE TABLE pgSQLt.CaptureOutputLog (
-  Id SERIAL PRIMARY KEY ,
-  OutputText text
-);
+-- CREATE TABLE pgSQLt.CaptureOutputLog (
+--   Id SERIAL PRIMARY KEY ,
+--   OutputText text
+-- );
+
+-- 
+-- CREATE VIEW pgSQLt.TestClasses
+-- AS
+--   -- SELECT s.name AS Name, s.schema_id AS SchemaId
+-- --     FROM sys.extended_properties ep
+-- --     JOIN sys.schemas s
+-- --       ON ep.major_id = s.schema_id
+-- --    WHERE ep.name = N'pgSQLt.TestClass';
+-- select 1
+-- ;
+-- 
+-- CREATE VIEW pgSQLt.Tests
+-- AS
+-- --   SELECT classes.SchemaId, classes.Name AS TestClassName, 
+-- --          procs.object_id AS ObjectId, procs.name AS Name
+-- --     FROM pgSQLt.TestClasses classes
+-- --     JOIN sys.procedures procs ON classes.SchemaId = procs.schema_id
+-- --    WHERE LOWER(procs.name) LIKE 'test%';
+-- select 1
+-- ;
 
 
-CREATE VIEW pgSQLt.TestClasses
-AS
-  -- SELECT s.name AS Name, s.schema_id AS SchemaId
---     FROM sys.extended_properties ep
---     JOIN sys.schemas s
---       ON ep.major_id = s.schema_id
---    WHERE ep.name = N'pgSQLt.TestClass';
-select 1
-;
+-- CREATE TABLE pgSQLt.TestResult(
+--     Id SERIAL PRIMARY KEY ,
+--     Class text NOT NULL,
+--     TestCase text NOT NULL,
+--     TranName text NOT NULL,
+--     Result text NULL,
+--     Msg text NULL
+-- );
 
-CREATE VIEW pgSQLt.Tests
-AS
---   SELECT classes.SchemaId, classes.Name AS TestClassName, 
---          procs.object_id AS ObjectId, procs.name AS Name
---     FROM pgSQLt.TestClasses classes
---     JOIN sys.procedures procs ON classes.SchemaId = procs.schema_id
---    WHERE LOWER(procs.name) LIKE 'test%';
-select 1
-;
+-- CREATE TABLE pgSQLt.TestMessage(
+--     Msg text
+-- );
+-- ;
+-- CREATE TABLE pgSQLt.Run_LastExecution(
+--     TestName text,
+--     SessionId INT,
+--     LoginTime timestamp
+-- );
+
+create type pgSQLt.test_execution_result as ENUM ('OK', 'FAIL', 'ERROR');
+create type pgSQLt.test_result as (message text, result pgSQLt.test_execution_result);
 
 
-CREATE TABLE pgSQLt.TestResult(
-    Id SERIAL PRIMARY KEY ,
-    Class text NOT NULL,
-    TestCase text NOT NULL,
-    --Name AS (QUOTENAME(Class) + '.' + QUOTENAME(TestCase)),
-    TranName text NOT NULL,
-    Result text NULL,
-    Msg text NULL
-);
-;
-CREATE TABLE pgSQLt.TestMessage(
-    Msg text
-);
-;
-CREATE TABLE pgSQLt.Run_LastExecution(
-    TestName text,
-    SessionId INT,
-    LoginTime timestamp
-);
+create function pgSQLt.private_split_object_name(objectName text, out schema_name text , out object_name text )
+returns record AS
+$$
+begin
+	select split_part(objectName, '.', 1), split_part(objectName, '.', 2) into schema_name, object_name; 
+end
+$$ language plpgsql;
+
+create function pgSQLt.Run(testName text) 
+returns pgSQLt.test_result AS 
+ $$
+ declare 
+	tc text;
+	exceptionText text;
+ BEGIN 
+	
+	
+	select schema_name into tc from pgSQLt.private_split_object_name(testName);
+	if not exists (select 1 FROM information_schema.schemata WHERE schema_name = lower(tc)) THEN
+		raise exception 'Test class % does not exist, to add it run PERFORM pgSQLt.NewTestClass (''%'');', tc, tc;
+	end if;
+	raise notice 'Setting up test class [%]', tc;
+	execute 'select ' || tc || '.setup();';
+	
+ 	raise notice 'Running test [%]' ,testname;
+	execute 'SELECT ' || testName || '();';
+
+	raise exception using
+            errcode='ALLOK',
+            message='Test case successfull.',
+            hint='This exception is only ment to rollback any changes made by the test.';
+
+EXCEPTION 
+	when sqlstate 'ALLOK' then
+		GET STACKED DIAGNOSTICS 
+			exceptionText = MESSAGE_TEXT;
+	
+		raise notice 'Test Completed OK!';
+		return ('Test succeded', 'OK')::pgSQLt.test_result;
+	when others then
+		GET STACKED DIAGNOSTICS 
+			exceptionText = MESSAGE_TEXT;
+		raise notice 'Test failed with ERROR: %', exceptionText;
+		return(exceptionText, 'ERROR')::pgSQLt.test_result;
+	
+	
+END 
+$$ LANGUAGE plpgsql;
+
+
 
 
 
@@ -173,10 +232,7 @@ create function pgSQLt.RunAll() returns void AS
  $$
  BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
 $$ LANGUAGE plpgsql;
-create function pgSQLt.Run() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
+
 create function pgSQLt.RunTest() returns void AS 
  $$
  BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
