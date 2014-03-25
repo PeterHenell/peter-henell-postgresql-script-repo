@@ -85,12 +85,29 @@ declare
 
 	if res.message != 'Test succeded' and res.result = 'OK' THEN
 		raise exception 'test should have finished ok but didnt [%]', res.message;
-	end if;
+	end if;   
+ END
+ $$;
+ 
+DO language plpgsql $$
+declare
+	res pgSQLt.test_result;
+ BEGIN
 
-	--select * into res from pgSQLt.Run('InternalUnitTest.ShouldReturnErrorWhenErrorInTestMethod');
--- 
--- 	select * into res from pgSQLt.Run('DoesNotExist.ShouldThrowExceptionThatTestClassIsMissing');
-	   
+	select * into res from pgSQLt.Run('InternalUnitTest.ShouldReturnErrorWhenErrorInTestMethod');
+EXCEPTION 
+	when sqlstate 'ERROR' then
+		raise notice 'This is good, test should fail with error due to system-exception';		
  END
  $$;
 
+
+DO language plpgsql $$
+declare
+	res pgSQLt.test_result;
+ BEGIN
+
+ 	select * into res from pgSQLt.Run('DoesNotExist.ShouldThrowExceptionThatTestClassIsMissing');
+	   
+ END
+ $$;

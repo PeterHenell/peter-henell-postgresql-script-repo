@@ -131,8 +131,10 @@ EXCEPTION
 	when others then
 		GET STACKED DIAGNOSTICS 
 			exceptionText = MESSAGE_TEXT;
-		raise notice 'Test failed with ERROR: %', exceptionText;
-		return(exceptionText, 'ERROR')::pgSQLt.test_result;
+		raise exception using
+		    errcode='ERROR',
+		    message='Test case is in ERROR.',
+		    hint=exceptionText;
 	
 	
 END 
