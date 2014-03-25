@@ -1,0 +1,7 @@
+pg_ctl stop
+$ sudo su – 
+# sync
+Query Optimization
+# echo 3 > /proc/sys/vm/drop_caches
+# logout
+$ pg_ctl start –l $PGLOG

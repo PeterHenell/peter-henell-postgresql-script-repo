@@ -42,8 +42,8 @@ select
 	t_xmax as "Deleting XID",   		/* deleting or locking xact ID */
 	t_field3 as "Union of ", 		/* union  CommandId t_cid;  inserting or deleting command ID, or both. TransactionId t_xvac;   old-style VACUUM FULL xact ID */
 	t_ctid ,				/* current TID of this or newer tuple */
-	t_infomask2,				/* number of attributes + various flags */
-	t_infomask,
+	--t_infomask2,				/* number of attributes + various flags */
+	--t_infomask,
 	mask.description as "flag bits",
 	mask2.description as "flag bits2",	
 	t_hoff as "Size of header",		/* sizeof header incl. bitmap, padding */
@@ -62,3 +62,5 @@ CROSS JOIN LATERAL (
 	FROM bitmap_infomask2 
 	WHERE t_infomask2 & bitmask > 0
 ) mask2 (description)
+
+

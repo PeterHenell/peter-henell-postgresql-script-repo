@@ -1,0 +1,14 @@
+
+
+-- query stats, need to be enabled in conf and server restarted.
+http://www.postgresql.org/docs/current/static/pgstatstatements.html
+
+-- tran locks
+http://www.postgresql.org/docs/current/static/pgrowlocks.html
+
+-- pgstattuple returns a relation's physical length, percentage of "dead" tuples, and other info.
+-- This may help users to determine whether vacuum is necessary or not.
+http://www.postgresql.org/docs/current/static/pgstattuple.html
+
+-- Benchmarking tool to run a set of queries towards the database
+http://www.postgresql.org/docs/current/static/pgbench.html
