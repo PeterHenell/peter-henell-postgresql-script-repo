@@ -23,9 +23,11 @@ create table pgsqlt.test_class(
 	name text
 );
 
+
 create function pgSQLt.NewTestClass(className text)
 returns void
-as $$ 
+as
+$$ 
 DECLARE
 	sql text;
 begin
@@ -36,7 +38,8 @@ begin
 	EXECUTE (sql);
 	insert into pgsqlt.test_class (name) values(className);
 	
-end $$ language plpgsql;
+end
+$$ language plpgsql;
 
 
 -- CREATE TABLE pgSQLt.CaptureOutputLog (
@@ -86,7 +89,8 @@ end $$ language plpgsql;
 -- );
 
 create type pgSQLt.test_execution_result as ENUM ('OK', 'FAIL', 'ERROR');
-create type pgSQLt.test_result as (message text, result pgSQLt.test_execution_result);
+create type pgSQLt.test_report as (message text, result pgSQLt.test_execution_result);
+
 
 
 create function pgSQLt.private_split_object_name(objectName text, out schema_name text , out object_name text )
@@ -97,15 +101,14 @@ begin
 end
 $$ language plpgsql;
 
-create function pgSQLt.Run(testName text) 
-returns pgSQLt.test_result AS 
- $$
- declare 
+
+CREATE FUNCTION pgSQLt.Run(testName text) 
+RETURNS pgSQLt.test_report AS 
+$$
+DECLARE 
 	tc text;
 	exceptionText text;
- BEGIN 
-	
-	
+BEGIN 	
 	select schema_name into tc from pgSQLt.private_split_object_name(testName);
 	if not exists (select 1 FROM information_schema.schemata WHERE schema_name = lower(tc)) THEN
 		raise exception 'Test class % does not exist, to add it run PERFORM pgSQLt.NewTestClass (''%'');', tc, tc;
@@ -127,16 +130,18 @@ EXCEPTION
 			exceptionText = MESSAGE_TEXT;
 	
 		raise notice 'Test Completed OK!';
-		return ('Test succeded', 'OK')::pgSQLt.test_result;
+		return ('Test succeded', 'OK')::pgSQLt.test_report;
+	when sqlstate 'ASSRT' then
+		GET STACKED DIAGNOSTICS 
+			exceptionText = MESSAGE_TEXT;
+	
+		raise notice 'Test FAILED due to assertion [%]', exceptionText;
+		return ('Test FAILED to du assertion error [' || exceptionText || ']', 'FAIL')::pgSQLt.test_report;
 	when others then
 		GET STACKED DIAGNOSTICS 
 			exceptionText = MESSAGE_TEXT;
-		raise exception using
-		    errcode='ERROR',
-		    message='Test case is in ERROR.',
-		    hint=exceptionText;
-	
-	
+		raise notice 'Test in ERROR due to [%]', exceptionText;
+		return ('Test failed in ERROR due to [' || exceptionText ||']' , 'ERROR')::pgSQLt.test_report;	
 END 
 $$ LANGUAGE plpgsql;
 
@@ -144,179 +149,314 @@ $$ LANGUAGE plpgsql;
 
 
 
-
-create function pgSQLt.AssertEquals() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
+create function pgsqlt.private_raise_assert_exception(message text) 
+returns void
+as
+$$
+BEGIN 
+	raise exception using
+            errcode='ASSRT',
+            message=message,
+            hint='This test failed due to assertion exception';
+END 
 $$ LANGUAGE plpgsql;
-create function pgSQLt.AssertEqualsString() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.AssertObjectExists() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.AssertResultSetsHaveSameMetaData() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.ResultSetFilter() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.AssertEqualsTable() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.AssertLike() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.AssertNotEquals() returns void AS 
- $$	
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.AssertEmptyTable() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.Fail() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.ExpectNoException() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.ExpectException() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.FakeFunction() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.FakeTable() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.RenameClass() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.RemoveObject() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.ApplyTrigger() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.SpyProcedure() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.Info() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.TableToText() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.RunAll() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.RunTest() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.RunTestClass() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.RunWithNullResults() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.RunWithXmlResults() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.TestCaseSummary() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.XmlResultFormatter() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.DefaultResultFormatter() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.GetTestResultFormatter() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.SetTestResultFormatter() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.LogCapturedOutput() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.SuppressOutput() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.CaptureOutput() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.NewConnection() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.Uninstall() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.DropClass() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.SetFakeViewOff() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-create function pgSQLt.SetFakeViewOn() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.F_Num() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
-
-create function pgSQLt.GetNewTranName() returns void AS 
- $$
- BEGIN RAISE EXCEPTION 'NOT IMPLEMENTED';  END 
-$$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.AssertEquals() returns void AS 
+-- $$
+-- BEGIN 
+-- 	RAISE EXCEPTION 'NOT IMPLEMENTED';  
+-- END 
+-- $$ LANGUAGE plpgsql;
 
 
+
+create function pgSQLt.assert_equal_strings(a text, b text) returns void AS 
+$$
+ BEGIN 
+     if a != b then
+	perform pgSQLt.private_raise_assert_exception('assert_equal_strings');
+     end if;
+END 
+$$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.AssertObjectExists() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.AssertResultSetsHaveSameMetaData() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.ResultSetFilter() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.AssertEqualsTable() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.AssertLike() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.AssertNotEquals() returns void AS 
+-- $$	
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.AssertEmptyTable() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.Fail() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.ExpectNoException() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.ExpectException() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.FakeFunction() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.FakeTable() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.RenameClass() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.RemoveObject() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.ApplyTrigger() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.SpyProcedure() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.Info() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.TableToText() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.RunAll() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.RunTest() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.RunTestClass() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.RunWithNullResults() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.RunWithXmlResults() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.TestCaseSummary() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.XmlResultFormatter() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.DefaultResultFormatter() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.GetTestResultFormatter() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.SetTestResultFormatter() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.LogCapturedOutput() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.SuppressOutput() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.CaptureOutput() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.NewConnection() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.Uninstall() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.DropClass() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.SetFakeViewOff() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- create function pgSQLt.SetFakeViewOn() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.F_Num() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 
+-- create function pgSQLt.GetNewTranName() returns void AS 
+-- $$
+--  BEGIN 
+--      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
+-- END 
+-- $$ LANGUAGE plpgsql;
+-- 
+-- 

@@ -13,6 +13,10 @@
 -- limitations under the License.
 
 
+--                       WHAT IS THIS DOCUMENT?
+-- This document is the unit test for the test framework itself.
+-- Running this should indicate that the framework is in good shape.
+
 DO language plpgsql $$
  BEGIN
    PERFORM pgSQLt.NewTestClass ('InternalUnitTest');
@@ -67,47 +71,68 @@ as
 $BODY$
 
 BEGIN
-
 	select 1 / 0;
-
 END
 $BODY$ language plpgsql;
 
 
--- Execution of test methods
 
+create function InternalUnitTest.ShouldAssertThatTwoEqualStringsAreEqual()
+returns void
+as
+$BODY$
+
+BEGIN
+	perform pgSQLt.assert_equal_strings('pgsqlt', 'pgsqlt');
+END
+$BODY$ language plpgsql;
+
+
+create function InternalUnitTest.ShouldAssertThatTwoDifferentStringsAreNotEqual()
+returns void
+as
+$BODY$
+
+BEGIN
+	perform pgSQLt.assert_equal_strings('pgsqlt', 'postgres');
+END
+$BODY$ language plpgsql;
+
+
+
+-- Execution of test methods
+-- This part of the document is running and validating framework tests.
 DO language plpgsql $$
 declare
-	res pgSQLt.test_result;
+	res pgSQLt.test_report;
  BEGIN
-
 	select * into res from pgSQLt.Run('InternalUnitTest.ShouldMakeSureSetupIsCalledBefore');
-
 	if res.message != 'Test succeded' and res.result = 'OK' THEN
 		raise exception 'test should have finished ok but didnt [%]', res.message;
 	end if;   
- END
- $$;
- 
-DO language plpgsql $$
-declare
-	res pgSQLt.test_result;
- BEGIN
 
 	select * into res from pgSQLt.Run('InternalUnitTest.ShouldReturnErrorWhenErrorInTestMethod');
-EXCEPTION 
-	when sqlstate 'ERROR' then
-		raise notice 'This is good, test should fail with error due to system-exception';		
+	if res.result != 'ERROR' THEN
+		raise exception 'test should have return ERROR but didnt, instead we got: [%]', res.message;
+	end if;
+		
+	select * into res from pgSQLt.Run('DoesNotExist.ShouldThrowExceptionThatTestClassIsMissing');
+ 	if res.result != 'ERROR' THEN
+		raise exception 'test should have return ERROR but didnt, instead we got: [%]', res.message;
+	end if;	
+
+
+	-- Assertion tests
+	select * into res from pgSQLt.Run('InternalUnitTest.ShouldAssertThatTwoEqualStringsAreEqual');
+	if res.result != 'OK' THEN
+		raise exception 'two strings should be asserted to be equal if they are equal instead we got: [%]', res.message;
+	end if;
+	select * into res from pgSQLt.Run('InternalUnitTest.ShouldAssertThatTwoDifferentStringsAreNotEqual');
+	if res.result != 'FAIL' THEN
+		raise exception 'Should not be equal. Instead we got: [%]', res.message;
+	end if;
  END
  $$;
 
+ 
 
-DO language plpgsql $$
-declare
-	res pgSQLt.test_result;
- BEGIN
-
- 	select * into res from pgSQLt.Run('DoesNotExist.ShouldThrowExceptionThatTestClassIsMissing');
-	   
- END
- $$;
