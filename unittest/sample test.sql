@@ -99,12 +99,29 @@ END
 $BODY$ language plpgsql;
 
 
+create function InternalUnitTest.should_split_object_name()
+returns void
+as
+$BODY$
+
+BEGIN
+	perform pgSQLt.assert_equal_strings('class', schema_name) from pgSQLt.private_split_object_name('class.method');
+	perform pgSQLt.assert_equal_strings('method',object_name) from pgSQLt.private_split_object_name('class.method');
+
+	perform pgSQLt.assert_equal_strings('public', schema_name) from pgSQLt.private_split_object_name('method');
+	perform pgSQLt.assert_equal_strings('method', object_name) from pgSQLt.private_split_object_name('method');
+	
+END
+$BODY$ language plpgsql;
+
+
 
 -- Execution of test methods
 -- This part of the document is running and validating framework tests.
 DO language plpgsql $$
 declare
 	res pgSQLt.test_report;
+	
  BEGIN
 	select * into res from pgSQLt.Run('InternalUnitTest.ShouldMakeSureSetupIsCalledBefore');
 	if res.message != 'Test succeded' and res.result = 'OK' THEN
@@ -131,8 +148,20 @@ declare
 	if res.result != 'FAIL' THEN
 		raise exception 'Should not be equal. Instead we got: [%]', res.message;
 	end if;
+
+	if (select count(*) from pgSQLt.run_class('InternalUnitTest')) != 5 THEN
+		raise exception 'Four tests should have been run';
+	end if;
+
+	if (select count(*) from pgSQLt.run_class('InternalUnitTest') where result != 'OK') != 2 THEN
+		raise exception 'Onl two of the tests are expected to fail';		
+	end if;	
  END
  $$;
+
+-- select * from pgSQLt.run_class('InternalUnitTest')
+-- select routine_name from information_schema.routines 
+-- where routine_schema = lower('InternalUnitTest') and lower(routine_name) != 'setup'
 
  
 

@@ -89,15 +89,24 @@ $$ language plpgsql;
 -- );
 
 create type pgSQLt.test_execution_result as ENUM ('OK', 'FAIL', 'ERROR');
-create type pgSQLt.test_report as (message text, result pgSQLt.test_execution_result);
+create type pgSQLt.test_report as (test_name text, message text, result pgSQLt.test_execution_result);
 
 
 
 create function pgSQLt.private_split_object_name(objectName text, out schema_name text , out object_name text )
 returns record AS
 $$
-begin
-	select split_part(objectName, '.', 1), split_part(objectName, '.', 2) into schema_name, object_name; 
+begin	
+	select 
+		case when strpos(objectName, '.') = 0 then 'public'
+		     else split_part(objectName, '.', 1)
+		end, 
+		case when strpos(objectName, '.') = 0 then objectName
+		     else split_part(objectName, '.', 2) 
+		end
+		
+	into 
+		schema_name, object_name; 
 end
 $$ language plpgsql;
 
@@ -111,7 +120,7 @@ DECLARE
 BEGIN 	
 	select schema_name into tc from pgSQLt.private_split_object_name(testName);
 	if not exists (select 1 FROM information_schema.schemata WHERE schema_name = lower(tc)) THEN
-		raise exception 'Test class % does not exist, to add it run PERFORM pgSQLt.NewTestClass (''%'');', tc, tc;
+		raise exception 'Test class [%] does not exist, to add it run PERFORM pgSQLt.NewTestClass (''%'');', tc, tc;
 	end if;
 	raise notice 'Setting up test class [%]', tc;
 	execute 'select ' || tc || '.setup();';
@@ -130,21 +139,41 @@ EXCEPTION
 			exceptionText = MESSAGE_TEXT;
 	
 		raise notice 'Test Completed OK!';
-		return ('Test succeded', 'OK')::pgSQLt.test_report;
+		return (testName, 'Test succeded', 'OK')::pgSQLt.test_report;
 	when sqlstate 'ASSRT' then
 		GET STACKED DIAGNOSTICS 
 			exceptionText = MESSAGE_TEXT;
 	
 		raise notice 'Test FAILED due to assertion [%]', exceptionText;
-		return ('Test FAILED to du assertion error [' || exceptionText || ']', 'FAIL')::pgSQLt.test_report;
+		return (testName, 'Test FAILED to due assertion error [' || exceptionText || ']', 'FAIL')::pgSQLt.test_report;
 	when others then
 		GET STACKED DIAGNOSTICS 
 			exceptionText = MESSAGE_TEXT;
 		raise notice 'Test in ERROR due to [%]', exceptionText;
-		return ('Test failed in ERROR due to [' || exceptionText ||']' , 'ERROR')::pgSQLt.test_report;	
+		return (testName, 'Test failed in ERROR due to [' || exceptionText ||']' , 'ERROR')::pgSQLt.test_report;	
 END 
 $$ LANGUAGE plpgsql;
 
+
+CREATE FUNCTION pgSQLt.run_class(class_name text, out report pgSQLt.test_report) 
+RETURNS setof pgSQLt.test_report AS 
+$$
+DECLARE 
+	test_method RECORD;
+	--report pgSQLt.test_report;
+BEGIN
+
+	FOR test_method IN select routine_name as test, class_name as test_class from information_schema.routines 
+		where routine_schema = lower(class_name) 
+		and lower(routine_name) != 'setup' 
+	LOOP
+		select * into report from pgSQLt.run(format('%s.%s', test_method.test_class, test_method.test));
+		return next;
+	END LOOP;
+
+	
+END
+$$ LANGUAGE plpgsql;
 
 
 
@@ -160,6 +189,7 @@ BEGIN
             hint='This test failed due to assertion exception';
 END 
 $$ LANGUAGE plpgsql;
+
 -- 
 -- 
 -- create function pgSQLt.AssertEquals() returns void AS 
@@ -171,14 +201,16 @@ $$ LANGUAGE plpgsql;
 
 
 
-create function pgSQLt.assert_equal_strings(a text, b text) returns void AS 
+create function pgSQLt.assert_equal_strings(expected text, actual text) 
+returns void AS 
 $$
  BEGIN 
-     if a != b then
-	perform pgSQLt.private_raise_assert_exception('assert_equal_strings');
+     if expected != actual then
+	perform pgSQLt.private_raise_assert_exception(format('assert_equal_strings: Expected [%s] but got [%s]', expected, actual));
      end if;
 END 
 $$ LANGUAGE plpgsql;
+
 -- 
 -- create function pgSQLt.AssertObjectExists() returns void AS 
 -- $$
