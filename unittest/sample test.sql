@@ -124,7 +124,6 @@ create function InternalUnitTest.should_see_that_table_is_empty()
 returns void
 as
 $BODY$
-
 BEGIN
 	delete from InternalUnitTest.customer;
 	perform pgSQLt.assert_empty_table('InternalUnitTest.customer');	
@@ -136,7 +135,6 @@ create function InternalUnitTest.should_fail_if_table_is_not_empty()
 returns void
 as
 $BODY$
-
 BEGIN
 	insert into InternalUnitTest.customer default values;
 	perform pgSQLt.assert_not_empty_table('InternalUnitTest.customer');	
@@ -145,13 +143,39 @@ END
 $BODY$ language plpgsql;
 
 
+create function InternalUnitTest.should_fail()
+returns void
+as
+$BODY$
+BEGIN	
+	perform pgSQLt.fail('This test is fail()-ing...');	
+END
+$BODY$ language plpgsql;
+
+
+create function InternalUnitTest.should_mock_table()
+returns void
+as
+$BODY$
+BEGIN	
+	insert into InternalUnitTest.customer default values;
+	perform pgSQLt.assert_not_empty_table('InternalUnitTest.customer');	
+
+	perform pgSQLt.fake_table('InternalUnitTest.customer');
+
+	perform pgSQLt.assert_empty_table('InternalUnitTest.customer');	
+	
+END
+$BODY$ language plpgsql;
+
+
+
 -- Execution of test methods
 -- This part of the document is running and validating framework tests.
 DO language plpgsql $$
-declare
+DECLARE
 	res pgSQLt.test_report;
-	
- BEGIN
+BEGIN
 	select * into res from pgSQLt.Run('InternalUnitTest.ShouldMakeSureSetupIsCalledBefore');
 	if res.message != 'Test succeded' and res.result = 'OK' THEN
 		raise exception 'test should have finished ok but didnt [%]', res.message;
@@ -183,12 +207,31 @@ declare
 		raise exception 'Should not be equal. Instead we got: [%]', res.message;
 	end if;
 
-	if (select count(*) from pgSQLt.run_class('InternalUnitTest') where result != 'OK') != 3 THEN
-		raise exception 'Only two of the tests are expected to fail';		
+	select * into res from pgSQLt.Run('InternalUnitTest.should_see_that_table_is_empty');
+	if res.result != 'OK' THEN
+		raise exception 'Should assert empty. Instead we got: [%]', res.message;
+	end if;
+
+	select * into res from pgSQLt.Run('InternalUnitTest.should_fail_if_table_is_not_empty');
+	if res.result != 'FAIL' THEN
+		raise exception 'Should not be empty. Instead we got: [%]', res.message;
+	end if;
+
+	select * into res from pgSQLt.Run('InternalUnitTest.should_fail');
+	if res.result != 'FAIL' THEN
+		raise exception 'Should just have failed. Instead we got: [%]', res.message;
+	end if;
+
+	select *  from pgSQLt.Run('InternalUnitTest.should_mock_table') into res;
+	if res.result != 'OK' THEN
+		raise exception 'Failed: [%]', res.message;
+	end if;
+	
+
+	if (select count(*) from pgSQLt.run_class('InternalUnitTest') where result != 'OK') != 4 THEN
+		raise exception 'Only some of the tests are expected to fail, increase this counter when failing tests have been added. Remember to also run the test and assert the failure';		
 	end if;	
-EXCEPTION 
-	when others then
-		raise exception 'Omg, no good';
+
  END
  $$;
 

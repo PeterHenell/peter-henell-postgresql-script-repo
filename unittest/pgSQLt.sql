@@ -243,8 +243,58 @@ BEGIN
 	EXECUTE 'SELECT 1 FROM ' || table_name || ' LIMIT 1'  INTO a ;
 	IF a IS NOT NULL
 	THEN
-		perform pgSQLt.private_raise_assert_exception(format('assert_empty_table: Table [%s] was not empty',  table_name ));
+		perform pgSQLt.private_raise_assert_exception(format('assert_empty_table: Table [%s] was NOT empty',  table_name ));
 	END IF;
+END 
+$$ LANGUAGE PLPGSQL;
+
+
+
+CREATE FUNCTION pgSQLt.assert_not_empty_table(table_name text) RETURNS VOID AS 
+$$
+DECLARE
+	a int;
+BEGIN 
+	perform pgSQLt.private_assert_test_session_active();
+	
+	EXECUTE 'SELECT 1 FROM ' || table_name || ' LIMIT 1'  INTO a ;
+	IF a IS NULL
+	THEN
+		perform pgSQLt.private_raise_assert_exception(format('assert_not_empty_table: Table [%s] WAS empty',  table_name ));
+	END IF;
+END 
+$$ LANGUAGE PLPGSQL;
+
+
+CREATE FUNCTION pgSQLt.fail(message text) RETURNS VOID AS 
+$$
+DECLARE
+	a int;
+BEGIN 
+	perform pgSQLt.private_assert_test_session_active();
+	
+	perform pgSQLt.private_raise_assert_exception(message);	
+END 
+$$ LANGUAGE PLPGSQL;
+
+
+-- create a new table that have no constraints but same columns and datatypes
+-- the old table should be renamed and then during test completion will be rolled back into normal state
+CREATE FUNCTION pgSQLt.fake_table(table_name text) RETURNS VOID AS 
+$$
+DECLARE 
+	obj_name text;
+	sch_name text;
+BEGIN 
+	perform pgSQLt.private_assert_test_session_active();
+
+	select object_name, schema_name into obj_name, sch_name from pgSQLt.private_split_object_name(table_name);
+
+	execute format('create table %1$s.temporary_clone 
+	as select * from %1$s.%2$s where 1 = 0;
+
+	alter table %1$s.%2$s RENAME TO %2$s_renamed;
+	alter table %1$s.temporary_clone RENAME TO %2$s;', sch_name, obj_name);	     
 END 
 $$ LANGUAGE PLPGSQL;
 
@@ -301,6 +351,7 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.AssertEquals() returns void AS 
 -- $$
 -- BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 -- 	RAISE EXCEPTION 'NOT IMPLEMENTED';  
 -- END 
 -- $$ LANGUAGE plpgsql;
@@ -309,6 +360,7 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.AssertObjectExists() returns void AS 
 -- $$
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
@@ -316,6 +368,7 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.AssertResultSetsHaveSameMetaData() returns void AS 
 -- $$
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
@@ -323,6 +376,7 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.ResultSetFilter() returns void AS 
 -- $$
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
@@ -330,6 +384,7 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.AssertEqualsTable() returns void AS 
 -- $$
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
@@ -337,6 +392,7 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.AssertLike() returns void AS 
 -- $$
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
@@ -344,6 +400,7 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.AssertNotEquals() returns void AS 
 -- $$	
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
@@ -353,6 +410,7 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.Fail() returns void AS 
 -- $$
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
@@ -361,6 +419,7 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.ExpectNoException() returns void AS 
 -- $$
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
@@ -368,6 +427,7 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.ExpectException() returns void AS 
 -- $$
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
@@ -376,21 +436,17 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.FakeFunction() returns void AS 
 -- $$
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
 -- 
--- create function pgSQLt.FakeTable() returns void AS 
--- $$
---  BEGIN 
---      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
--- END 
--- $$ LANGUAGE plpgsql;
--- 
+
 -- 
 -- create function pgSQLt.RenameClass() returns void AS 
 -- $$
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
@@ -398,6 +454,7 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.RemoveObject() returns void AS 
 -- $$
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
@@ -405,6 +462,7 @@ $$ LANGUAGE PLPGSQL;
 -- create function pgSQLt.ApplyTrigger() returns void AS 
 -- $$
 --  BEGIN 
+-- perform pgSQLt.private_assert_test_session_active();
 --      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
 -- END 
 -- $$ LANGUAGE plpgsql;
