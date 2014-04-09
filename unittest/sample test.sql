@@ -19,7 +19,7 @@
 
 DO language plpgsql $$
  BEGIN
-   PERFORM pgSQLt.NewTestClass ('InternalUnitTest');
+   PERFORM pgSQLt.new_test_class ('InternalUnitTest');
    delete from public.orders;
  END
  $$;
@@ -114,6 +114,15 @@ BEGIN
 END
 $BODY$ language plpgsql;
 
+create function InternalUnitTest.should_error_if_test_not_started()
+returns void
+as
+$BODY$
+
+BEGIN
+	perform pgSQLt.assert_equal_strings('class', 'class');	
+END
+$BODY$ language plpgsql;
 
 
 -- Execution of test methods
@@ -149,19 +158,43 @@ declare
 		raise exception 'Should not be equal. Instead we got: [%]', res.message;
 	end if;
 
-	if (select count(*) from pgSQLt.run_class('InternalUnitTest')) != 5 THEN
-		raise exception 'Four tests should have been run';
+	select * into res from pgSQLt.Run('InternalUnitTest.ShouldAssertThatTwoDifferentStringsAreNotEqual');
+	if res.result != 'FAIL' THEN
+		raise exception 'Should not be equal. Instead we got: [%]', res.message;
 	end if;
 
 	if (select count(*) from pgSQLt.run_class('InternalUnitTest') where result != 'OK') != 2 THEN
-		raise exception 'Onl two of the tests are expected to fail';		
+		raise exception 'Only two of the tests are expected to fail';		
 	end if;	
+EXCEPTION 
+	when others then
+		raise notice 'Omg';
  END
  $$;
 
--- select * from pgSQLt.run_class('InternalUnitTest')
+DO language plpgsql $$
+declare
+	res pgSQLt.test_report;	
+BEGIN
+	perform InternalUnitTest.should_error_if_test_not_started();
+	raise exception 'Should have failed because test session have not been started';
+EXCEPTION 
+	when sqlstate 'ERROR' then	
+		raise notice 'Test Completed OK!';
+	when sqlstate 'ALLOK' then
+		raise exception 'Test should have failed in ERROR';
+	when others then
+		raise exception 'Test should have failed in ERROR';
+ END
+ $$;
+
+
+
+select * from pgSQLt.run_class('InternalUnitTest') where result in( 'FAIL', 'ERROR');
 -- select routine_name from information_schema.routines 
 -- where routine_schema = lower('InternalUnitTest') and lower(routine_name) != 'setup'
+
+select * from pgSQLt.test_session
 
  
 

@@ -23,8 +23,15 @@ create table pgsqlt.test_class(
 	name text
 );
 
+create table pgSQLt.test_session(
+	test_session_id serial primary key,
+	started timestamptz not null default(now()),
+	ended timestamptz null,
+	is_active boolean  not null default(true)
+);
 
-create function pgSQLt.NewTestClass(className text)
+
+create function pgSQLt.new_test_class(className text)
 returns void
 as
 $$ 
@@ -40,6 +47,198 @@ begin
 	
 end
 $$ language plpgsql;
+
+
+CREATE FUNCTION pgSQLt.private_start_test_session()
+RETURNS INT
+AS
+$$ 
+DECLARE
+	inserted_id INT;
+BEGIN	
+	INSERT INTO pgSQLt.test_session DEFAULT VALUES
+	RETURNING test_session_id INTO inserted_id;
+
+	RETURN inserted_id;	
+END
+$$ LANGUAGE plpgsql;
+
+
+CREATE FUNCTION pgSQLt.private_end_test_session(session_id int)
+RETURNS VOID
+AS
+$$ 
+BEGIN	
+	UPDATE pgSQLt.test_session 
+		SET 
+			is_active = false,
+			ended = now()
+	where test_session_id = session_id;
+	
+END
+$$ LANGUAGE plpgsql;
+
+
+create type pgSQLt.test_execution_result as ENUM ('OK', 'FAIL', 'ERROR');
+create type pgSQLt.test_report as (test_name text, message text, result pgSQLt.test_execution_result);
+
+
+
+create function pgSQLt.private_split_object_name(objectName text, out schema_name text , out object_name text )
+returns record AS
+$$
+begin	
+	select 
+		case when strpos(objectName, '.') = 0 then 'public'
+		     else split_part(objectName, '.', 1)
+		end, 
+		case when strpos(objectName, '.') = 0 then objectName
+		     else split_part(objectName, '.', 2) 
+		end
+		
+	into 
+		schema_name, object_name; 
+end
+$$ language plpgsql;
+
+
+CREATE FUNCTION pgSQLt.private_signal_test(report pgSQLt.test_report, session_id int = null, final_test_in_session boolean = true)
+RETURNS pgSQLt.test_report AS 
+$$
+BEGIN
+	if final_test_in_session then 
+		perform pgSQLt.private_end_test_session(session_id);
+	end if;
+	return report;
+end
+$$ language plpgsql;
+
+
+CREATE FUNCTION pgSQLt.Run(testName text, session_id int = null, final_test_in_session boolean = true) 
+RETURNS pgSQLt.test_report AS 
+$$
+DECLARE 
+	tc text;
+	exceptionText text;
+	report pgSQLt.test_report;
+BEGIN 	
+	select schema_name into tc from pgSQLt.private_split_object_name(testName);
+	if not exists (select 1 FROM information_schema.schemata WHERE schema_name = lower(tc)) THEN
+		raise exception 'Test class [%] does not exist, to add it run PERFORM pgSQLt.NewTestClass (''%'');', tc, tc;
+	end if;
+
+	if session_id is null then
+		select pgSQLt.private_start_test_session() into session_id; 
+	end if;
+	
+	raise notice 'Setting up test class [%]', tc;
+	execute 'select ' || tc || '.setup();';
+	
+ 	raise notice 'Running test [%]' ,testname;
+	execute 'SELECT ' || testName || '();';
+
+	raise exception using
+            errcode='ALLOK',
+            message='Test case successfull.',
+            hint='This exception is only ment to rollback any changes made by the test.';
+
+EXCEPTION 
+	when sqlstate 'ALLOK' then
+		--raise notice 'Test Completed OK!';
+		return pgSQLt.private_signal_test(ROW(testName, 'Test succeded', 'OK')::pgSQLt.test_report);
+	when sqlstate 'ASSRT' then
+		GET STACKED DIAGNOSTICS 
+			exceptionText = MESSAGE_TEXT;
+	
+		--raise notice 'Test FAILED due to assertion [%]', exceptionText;
+		return pgSQLt.private_signal_test(ROW(testName, 'Test FAILED to due assertion error [' || exceptionText || ']', 'FAIL')::pgSQLt.test_report);
+	when others then
+		GET STACKED DIAGNOSTICS 
+			exceptionText = MESSAGE_TEXT;
+		--raise notice 'Test in ERROR due to [%]', exceptionText;
+		return pgSQLt.private_signal_test(ROW(testName, 'Test failed in ERROR due to [' || exceptionText ||']' , 'ERROR')::pgSQLt.test_report);	
+END 
+$$ LANGUAGE plpgsql;
+
+
+CREATE FUNCTION pgSQLt.run_class(class_name text, out report pgSQLt.test_report) 
+RETURNS setof pgSQLt.test_report AS 
+$$
+DECLARE 
+	test_method RECORD;
+	--report pgSQLt.test_report;
+	session_id int;
+BEGIN
+
+	select pgSQLt.private_start_test_session() into session_id;
+	
+	FOR test_method IN select routine_name as test, class_name as test_class from information_schema.routines 
+		where routine_schema = lower(class_name) 
+		and lower(routine_name) != 'setup' 
+	LOOP
+		select * into report from pgSQLt.run(format('%s.%s', test_method.test_class, test_method.test), session_id, false);
+		return next;
+	END LOOP;
+
+	perform pgSQLt.private_end_test_session(session_id);
+	
+END
+$$ LANGUAGE plpgsql;
+
+
+
+
+create function pgsqlt.private_raise_assert_exception(message text) 
+returns void
+as
+$$
+BEGIN 
+	raise exception using
+            errcode='ASSRT',
+            message=message,
+            hint='This test failed due to assertion exception';
+END 
+$$ LANGUAGE plpgsql;
+
+
+create function pgsqlt.private_raise_error_exception(message text) 
+returns void
+as
+$$
+BEGIN 
+	raise exception using
+            errcode='ERROR',
+            message=message,
+            hint='This test failed due to ERROR';
+END 
+$$ LANGUAGE plpgsql;
+
+
+create function pgSQLt.private_assert_test_session_active() 
+returns void AS 
+$$
+BEGIN 
+	if not exists(select 1 from pgSQLt.test_session) then
+		perform pgSQLt.private_raise_error_exception('Test session is not started, use pgSQLt.run or pgSQLt.run_class to execute test methods. Do not execute them directly.');
+	end if;
+		
+END 
+$$ LANGUAGE plpgsql;
+
+create function pgSQLt.assert_equal_strings(expected text, actual text) 
+returns void AS 
+$$
+BEGIN 
+     perform pgSQLt.private_assert_test_session_active();
+
+     if expected != actual then
+	perform pgSQLt.private_raise_assert_exception(format('assert_equal_strings: Expected [%s] but got [%s]', expected, actual));
+     end if;
+END 
+$$ LANGUAGE plpgsql;
+
+
+
 
 
 -- CREATE TABLE pgSQLt.CaptureOutputLog (
@@ -88,108 +287,6 @@ $$ language plpgsql;
 --     LoginTime timestamp
 -- );
 
-create type pgSQLt.test_execution_result as ENUM ('OK', 'FAIL', 'ERROR');
-create type pgSQLt.test_report as (test_name text, message text, result pgSQLt.test_execution_result);
-
-
-
-create function pgSQLt.private_split_object_name(objectName text, out schema_name text , out object_name text )
-returns record AS
-$$
-begin	
-	select 
-		case when strpos(objectName, '.') = 0 then 'public'
-		     else split_part(objectName, '.', 1)
-		end, 
-		case when strpos(objectName, '.') = 0 then objectName
-		     else split_part(objectName, '.', 2) 
-		end
-		
-	into 
-		schema_name, object_name; 
-end
-$$ language plpgsql;
-
-
-CREATE FUNCTION pgSQLt.Run(testName text) 
-RETURNS pgSQLt.test_report AS 
-$$
-DECLARE 
-	tc text;
-	exceptionText text;
-BEGIN 	
-	select schema_name into tc from pgSQLt.private_split_object_name(testName);
-	if not exists (select 1 FROM information_schema.schemata WHERE schema_name = lower(tc)) THEN
-		raise exception 'Test class [%] does not exist, to add it run PERFORM pgSQLt.NewTestClass (''%'');', tc, tc;
-	end if;
-	raise notice 'Setting up test class [%]', tc;
-	execute 'select ' || tc || '.setup();';
-	
- 	raise notice 'Running test [%]' ,testname;
-	execute 'SELECT ' || testName || '();';
-
-	raise exception using
-            errcode='ALLOK',
-            message='Test case successfull.',
-            hint='This exception is only ment to rollback any changes made by the test.';
-
-EXCEPTION 
-	when sqlstate 'ALLOK' then
-		GET STACKED DIAGNOSTICS 
-			exceptionText = MESSAGE_TEXT;
-	
-		raise notice 'Test Completed OK!';
-		return (testName, 'Test succeded', 'OK')::pgSQLt.test_report;
-	when sqlstate 'ASSRT' then
-		GET STACKED DIAGNOSTICS 
-			exceptionText = MESSAGE_TEXT;
-	
-		raise notice 'Test FAILED due to assertion [%]', exceptionText;
-		return (testName, 'Test FAILED to due assertion error [' || exceptionText || ']', 'FAIL')::pgSQLt.test_report;
-	when others then
-		GET STACKED DIAGNOSTICS 
-			exceptionText = MESSAGE_TEXT;
-		raise notice 'Test in ERROR due to [%]', exceptionText;
-		return (testName, 'Test failed in ERROR due to [' || exceptionText ||']' , 'ERROR')::pgSQLt.test_report;	
-END 
-$$ LANGUAGE plpgsql;
-
-
-CREATE FUNCTION pgSQLt.run_class(class_name text, out report pgSQLt.test_report) 
-RETURNS setof pgSQLt.test_report AS 
-$$
-DECLARE 
-	test_method RECORD;
-	--report pgSQLt.test_report;
-BEGIN
-
-	FOR test_method IN select routine_name as test, class_name as test_class from information_schema.routines 
-		where routine_schema = lower(class_name) 
-		and lower(routine_name) != 'setup' 
-	LOOP
-		select * into report from pgSQLt.run(format('%s.%s', test_method.test_class, test_method.test));
-		return next;
-	END LOOP;
-
-	
-END
-$$ LANGUAGE plpgsql;
-
-
-
-
-create function pgsqlt.private_raise_assert_exception(message text) 
-returns void
-as
-$$
-BEGIN 
-	raise exception using
-            errcode='ASSRT',
-            message=message,
-            hint='This test failed due to assertion exception';
-END 
-$$ LANGUAGE plpgsql;
-
 -- 
 -- 
 -- create function pgSQLt.AssertEquals() returns void AS 
@@ -198,18 +295,6 @@ $$ LANGUAGE plpgsql;
 -- 	RAISE EXCEPTION 'NOT IMPLEMENTED';  
 -- END 
 -- $$ LANGUAGE plpgsql;
-
-
-
-create function pgSQLt.assert_equal_strings(expected text, actual text) 
-returns void AS 
-$$
- BEGIN 
-     if expected != actual then
-	perform pgSQLt.private_raise_assert_exception(format('assert_equal_strings: Expected [%s] but got [%s]', expected, actual));
-     end if;
-END 
-$$ LANGUAGE plpgsql;
 
 -- 
 -- create function pgSQLt.AssertObjectExists() returns void AS 
