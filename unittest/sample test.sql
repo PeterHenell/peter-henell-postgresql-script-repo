@@ -19,8 +19,7 @@
 
 DO language plpgsql $$
  BEGIN
-   PERFORM pgSQLt.new_test_class ('InternalUnitTest');
-   delete from public.orders;
+   PERFORM pgSQLt.new_test_class ('InternalUnitTest');   
  END
  $$;
 
@@ -28,17 +27,13 @@ DO language plpgsql $$
 create function InternalUnitTest.setup()
 returns void
 as $$
-
-	INSERT INTO public.orders(orderid, orderdate, customerid, netamount, tax, totalamount) VALUES(
-		0             /* orderid(integer) */ , 
-		now()         /* orderdate(date) */ , 
-		NULL          /* customerid(integer) */ , 
-		0             /* netamount(numeric) */ , 
-		0             /* tax(numeric) */ , 
-		0             /* totalamount(numeric) */ );
-	
-
-$$ language sql;
+BEGIN
+	EXECUTE format('
+   CREATE TABLE IF NOT EXISTS internalunittest.customer(id serial primary key)');
+   
+	insert into internalunittest.customer default values;
+END
+$$ language plpgsql;
 
 DO language plpgsql $$
  BEGIN
@@ -57,7 +52,7 @@ $BODY$
 declare
 	tableShouldHaveOneRow int;
 BEGIN
-	select 1 into tableShouldHaveOneRow from public.orders;
+	select 1 into tableShouldHaveOneRow from InternalUnitTest.customer;
 	if not found then
 		raise exception 'setup was not run';
 	end if;
@@ -125,6 +120,31 @@ END
 $BODY$ language plpgsql;
 
 
+create function InternalUnitTest.should_see_that_table_is_empty()
+returns void
+as
+$BODY$
+
+BEGIN
+	delete from InternalUnitTest.customer;
+	perform pgSQLt.assert_empty_table('InternalUnitTest.customer');	
+END
+$BODY$ language plpgsql;
+
+
+create function InternalUnitTest.should_fail_if_table_is_not_empty()
+returns void
+as
+$BODY$
+
+BEGIN
+	insert into InternalUnitTest.customer default values;
+	perform pgSQLt.assert_not_empty_table('InternalUnitTest.customer');	
+	perform pgSQLt.assert_empty_table('InternalUnitTest.customer');	
+END
+$BODY$ language plpgsql;
+
+
 -- Execution of test methods
 -- This part of the document is running and validating framework tests.
 DO language plpgsql $$
@@ -163,12 +183,12 @@ declare
 		raise exception 'Should not be equal. Instead we got: [%]', res.message;
 	end if;
 
-	if (select count(*) from pgSQLt.run_class('InternalUnitTest') where result != 'OK') != 2 THEN
+	if (select count(*) from pgSQLt.run_class('InternalUnitTest') where result != 'OK') != 3 THEN
 		raise exception 'Only two of the tests are expected to fail';		
 	end if;	
 EXCEPTION 
 	when others then
-		raise notice 'Omg';
+		raise exception 'Omg, no good';
  END
  $$;
 
@@ -194,7 +214,7 @@ select * from pgSQLt.run_class('InternalUnitTest') where result in( 'FAIL', 'ERR
 -- select routine_name from information_schema.routines 
 -- where routine_schema = lower('InternalUnitTest') and lower(routine_name) != 'setup'
 
-select * from pgSQLt.test_session
+--select * from pgSQLt.test_session
 
  
 

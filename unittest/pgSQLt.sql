@@ -144,18 +144,14 @@ BEGIN
 
 EXCEPTION 
 	when sqlstate 'ALLOK' then
-		--raise notice 'Test Completed OK!';
 		return pgSQLt.private_signal_test(ROW(testName, 'Test succeded', 'OK')::pgSQLt.test_report);
 	when sqlstate 'ASSRT' then
 		GET STACKED DIAGNOSTICS 
-			exceptionText = MESSAGE_TEXT;
-	
-		--raise notice 'Test FAILED due to assertion [%]', exceptionText;
+			exceptionText = MESSAGE_TEXT;	
 		return pgSQLt.private_signal_test(ROW(testName, 'Test FAILED to due assertion error [' || exceptionText || ']', 'FAIL')::pgSQLt.test_report);
 	when others then
 		GET STACKED DIAGNOSTICS 
 			exceptionText = MESSAGE_TEXT;
-		--raise notice 'Test in ERROR due to [%]', exceptionText;
 		return pgSQLt.private_signal_test(ROW(testName, 'Test failed in ERROR due to [' || exceptionText ||']' , 'ERROR')::pgSQLt.test_report);	
 END 
 $$ LANGUAGE plpgsql;
@@ -166,7 +162,6 @@ RETURNS setof pgSQLt.test_report AS
 $$
 DECLARE 
 	test_method RECORD;
-	--report pgSQLt.test_report;
 	session_id int;
 BEGIN
 
@@ -218,7 +213,7 @@ create function pgSQLt.private_assert_test_session_active()
 returns void AS 
 $$
 BEGIN 
-	if not exists(select 1 from pgSQLt.test_session) then
+	if not exists(select 1 from pgSQLt.test_session where is_active = true) then
 		perform pgSQLt.private_raise_error_exception('Test session is not started, use pgSQLt.run or pgSQLt.run_class to execute test methods. Do not execute them directly.');
 	end if;
 		
@@ -238,6 +233,20 @@ END
 $$ LANGUAGE plpgsql;
 
 
+CREATE FUNCTION pgSQLt.assert_empty_table(table_name text) RETURNS VOID AS 
+$$
+DECLARE
+	a int;
+BEGIN 
+	perform pgSQLt.private_assert_test_session_active();
+	
+	EXECUTE 'SELECT 1 FROM ' || table_name || ' LIMIT 1'  INTO a ;
+	IF a IS NOT NULL
+	THEN
+		perform pgSQLt.private_raise_assert_exception(format('assert_empty_table: Table [%s] was not empty',  table_name ));
+	END IF;
+END 
+$$ LANGUAGE PLPGSQL;
 
 
 
@@ -339,12 +348,7 @@ $$ LANGUAGE plpgsql;
 -- END 
 -- $$ LANGUAGE plpgsql;
 -- 
--- create function pgSQLt.AssertEmptyTable() returns void AS 
--- $$
---  BEGIN 
---      RAISE EXCEPTION 'NOT IMPLEMENTED'; 
--- END 
--- $$ LANGUAGE plpgsql;
+
 -- 
 -- create function pgSQLt.Fail() returns void AS 
 -- $$
