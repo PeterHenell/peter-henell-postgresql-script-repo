@@ -299,6 +299,19 @@ END
 $$ LANGUAGE PLPGSQL;
 
 
+ 
+CREATE FUNCTION pgSQLt.assert_equals(expected anyelement, actual anyelement) RETURNS VOID AS 
+$$
+BEGIN 
+	PERFORM pgSQLt.private_assert_test_session_active();
+
+	if actual is distinct from expected then 
+		perform pgSQLt.private_raise_assert_exception(format('assert_equals: Expected [%s] but got [%s]', expected::text, actual::text));
+	end if;
+END 
+$$ LANGUAGE PLPGSQL;
+
+
 
 -- CREATE TABLE pgSQLt.CaptureOutputLog (
 --   Id SERIAL PRIMARY KEY ,
@@ -347,14 +360,7 @@ $$ LANGUAGE PLPGSQL;
 -- );
 
 -- 
--- 
--- create function pgSQLt.AssertEquals() returns void AS 
--- $$
--- BEGIN 
--- perform pgSQLt.private_assert_test_session_active();
--- 	RAISE EXCEPTION 'NOT IMPLEMENTED';  
--- END 
--- $$ LANGUAGE plpgsql;
+
 
 -- 
 -- create function pgSQLt.AssertObjectExists() returns void AS 

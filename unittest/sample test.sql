@@ -164,10 +164,24 @@ BEGIN
 	perform pgSQLt.fake_table('InternalUnitTest.customer');
 
 	perform pgSQLt.assert_empty_table('InternalUnitTest.customer');	
-	
 END
 $BODY$ language plpgsql;
 
+
+create function InternalUnitTest.should_assert_equal_of_any_datatype()
+returns void
+as
+$BODY$
+BEGIN	
+	perform pgSQLt.assert_equals(1, 1);
+	perform pgSQLt.assert_equals(1::bigint, 1::bigint);
+	perform pgSQLt.assert_equals(1::float, 1::float);
+	perform pgSQLt.assert_equals(1::decimal, 1::decimal);
+
+	-- TODO: Fix or not to fix, strings had to be casted in order for this to work.
+	perform pgSQLt.assert_equals('hi'::text, 'hi'::text); -- sensitive to text when not casting to "text":
+END
+$BODY$ language plpgsql;
 
 
 -- Execution of test methods
@@ -223,6 +237,11 @@ BEGIN
 	end if;
 
 	select *  from pgSQLt.Run('InternalUnitTest.should_mock_table') into res;
+	if res.result != 'OK' THEN
+		raise exception 'Failed: [%]', res.message;
+	end if;
+
+	select *  from pgSQLt.Run('InternalUnitTest.should_assert_equal_of_any_datatype') into res;
 	if res.result != 'OK' THEN
 		raise exception 'Failed: [%]', res.message;
 	end if;
