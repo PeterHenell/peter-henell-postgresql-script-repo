@@ -184,6 +184,29 @@ END
 $BODY$ language plpgsql;
 
 
+create function InternalUnitTest.should_assert_tables_as_equal()
+returns void
+as
+$BODY$
+BEGIN	
+	perform pgSQLt.assert_tables_equal('orders', 'orders');
+END
+$BODY$ language plpgsql;
+
+
+create function InternalUnitTest.should_not_be_equal_tables()
+returns void
+as
+$BODY$
+BEGIN	
+	create table invalidOrders as select * from orders;
+	insert into invalidOrders default values;
+
+	perform pgSQLt.assert_tables_not_equal('invalidOrders', 'orders');
+	perform pgSQLt.assert_tables_equal('invalidOrders', 'orders');
+END
+$BODY$ language plpgsql;
+
 -- Execution of test methods
 -- This part of the document is running and validating framework tests.
 DO language plpgsql $$
@@ -245,9 +268,13 @@ BEGIN
 	if res.result != 'OK' THEN
 		raise exception 'Failed: [%]', res.message;
 	end if;
-	
 
-	if (select count(*) from pgSQLt.run_class('InternalUnitTest') where result != 'OK') != 4 THEN
+	select * into res from pgSQLt.Run('InternalUnitTest.should_not_be_equal_tables');
+	if res.result != 'FAIL' THEN
+		raise exception 'Should have failed. Instead we got: [%]', res.message;
+	end if;
+
+	if (select count(*) from pgSQLt.run_class('InternalUnitTest') where result != 'OK') != 5 THEN
 		raise exception 'Only some of the tests are expected to fail, increase this counter when failing tests have been added. Remember to also run the test and assert the failure';		
 	end if;	
 

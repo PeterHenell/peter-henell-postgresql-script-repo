@@ -312,6 +312,36 @@ END
 $$ LANGUAGE PLPGSQL;
 
 
+CREATE FUNCTION pgSQLt.assert_tables_equal(expected text, actual text) RETURNS VOID AS 
+$$
+declare
+	r int;
+BEGIN 
+	PERFORM pgSQLt.private_assert_test_session_active();
+
+	execute format('select count(*) from (select * from %s except select * from %s) as r', expected, actual) into r;
+	if r > 0 then
+		perform pgSQLt.private_raise_assert_exception(format('assert_tables_equal: Expected table [%s] was not same as actual table [%s]', expected::text, actual::text));
+	end if;
+	
+END 
+$$ LANGUAGE PLPGSQL;
+
+
+CREATE FUNCTION pgSQLt.assert_tables_not_equal(expected text, actual text) RETURNS VOID AS 
+$$
+declare
+	r int;
+BEGIN 
+	PERFORM pgSQLt.private_assert_test_session_active();
+
+	execute format('select count(*) from (select * from %s except select * from %s) as r', expected, actual) into r;
+	if r = 0 then
+		perform pgSQLt.private_raise_assert_exception(format('assert_tables_not_equal: Expected table [%s] WAS same as actual table [%s]', expected::text, actual::text));
+	end if;
+	
+END 
+$$ LANGUAGE PLPGSQL;
 
 -- CREATE TABLE pgSQLt.CaptureOutputLog (
 --   Id SERIAL PRIMARY KEY ,
@@ -645,3 +675,4 @@ $$ LANGUAGE PLPGSQL;
 -- $$ LANGUAGE plpgsql;
 -- 
 -- 
+
