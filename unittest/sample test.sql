@@ -189,7 +189,7 @@ returns void
 as
 $BODY$
 BEGIN	
-	perform pgSQLt.assert_tables_equal('orders', 'orders');
+	perform pgSQLt.assert_tables_equal('internalunittest.customer', 'internalunittest.customer');
 END
 $BODY$ language plpgsql;
 
@@ -199,13 +199,54 @@ returns void
 as
 $BODY$
 BEGIN	
-	create table invalidOrders as select * from orders;
-	insert into invalidOrders default values;
+	create table internalunittest.invalidCustomers as 
+		select * from internalunittest.customer;
 
-	perform pgSQLt.assert_tables_not_equal('invalidOrders', 'orders');
-	perform pgSQLt.assert_tables_equal('invalidOrders', 'orders');
+	insert into internalunittest.invalidCustomers default values;
+
+	perform pgSQLt.assert_tables_not_equal('internalunittest.invalidCustomers', 'internalunittest.customer');
+	perform pgSQLt.assert_tables_not_equal('internalunittest.customer','internalunittest.invalidCustomers');
+	
+	perform pgSQLt.assert_tables_equal('internalunittest.invalidCustomers', 'internalunittest.customer');
 END
 $BODY$ language plpgsql;
+
+create function InternalUnitTest.should_not_be_equals_tables_unidirectional()
+returns void
+as
+$BODY$
+BEGIN	
+	create table internalunittest.invalidCustomers as 
+		select * from internalunittest.customer;
+
+	insert into internalunittest.invalidCustomers default values;
+
+	perform pgSQLt.assert_tables_not_equal('internalunittest.invalidCustomers', 'internalunittest.customer');
+	perform pgSQLt.assert_tables_not_equal('internalunittest.customer','internalunittest.invalidCustomers');
+	
+END
+$BODY$ language plpgsql;
+
+
+
+create function InternalUnitTest.should_be_equals_tables_unidirectional()
+returns void
+as
+$BODY$
+BEGIN	
+	truncate table internalunittest.customer;
+	create table internalunittest.invalidCustomers as 
+		select * from internalunittest.customer;
+
+	insert into internalunittest.invalidCustomers(id) values(1);
+	insert into internalunittest.customer(id) values(1);
+
+	perform pgSQLt.assert_tables_equal('internalunittest.invalidCustomers', 'internalunittest.customer');
+	perform pgSQLt.assert_tables_equal('internalunittest.customer','internalunittest.invalidCustomers');
+	
+END
+$BODY$ language plpgsql;
+
 
 -- Execution of test methods
 -- This part of the document is running and validating framework tests.
@@ -306,4 +347,5 @@ select * from pgSQLt.run_class('InternalUnitTest') where result in( 'FAIL', 'ERR
 --select * from pgSQLt.test_session
 
  
+
 

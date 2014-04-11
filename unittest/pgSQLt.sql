@@ -319,7 +319,22 @@ declare
 BEGIN 
 	PERFORM pgSQLt.private_assert_test_session_active();
 
-	execute format('select count(*) from (select * from %s except select * from %s) as r', expected, actual) into r;
+	execute format('
+select count(*) from 
+(
+	select * from
+	(
+	 select * from %1$s 
+	 except
+	 select * from %2$s
+	) as a
+	union all
+	( 
+	 select * from %2$s 
+	 except
+	 select * from %1$s
+	) 
+) as diff', expected, actual) into r;
 	if r > 0 then
 		perform pgSQLt.private_raise_assert_exception(format('assert_tables_equal: Expected table [%s] was not same as actual table [%s]', expected::text, actual::text));
 	end if;
@@ -335,7 +350,22 @@ declare
 BEGIN 
 	PERFORM pgSQLt.private_assert_test_session_active();
 
-	execute format('select count(*) from (select * from %s except select * from %s) as r', expected, actual) into r;
+	execute format('
+select count(*) from 
+(
+	select * from
+	(
+	 select * from %1$s 
+	 except
+	 select * from %2$s
+	) as a
+	union all
+	( 
+	 select * from %2$s 
+	 except
+	 select * from %1$s
+	) 
+) as diff', expected, actual) into r;
 	if r = 0 then
 		perform pgSQLt.private_raise_assert_exception(format('assert_tables_not_equal: Expected table [%s] WAS same as actual table [%s]', expected::text, actual::text));
 	end if;
