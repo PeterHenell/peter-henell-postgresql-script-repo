@@ -1,0 +1,192 @@
+--Lock dependency information
+--Performance Snippets
+--Lock dependency info
+--Works with PostgreSQL
+--Any version
+--Written in
+--SQL
+----Depends on
+--Nothing
+---At times it is very usefull to see which locks depend uppon each other.
+--Flat View of Blocking
+
+--All columns prefixed with waiting_ hold information about the not granted lock, while the colums prefixed with other_ hold information about other locks on the same relation respectively transactionid
+-- For PostgreSQL Version < 9.2
+SELECT 
+    waiting.locktype           AS waiting_locktype,
+    waiting.relation::regclass AS waiting_table,
+    waiting_stm.current_query  AS waiting_query,
+    waiting.mode               AS waiting_mode,
+    waiting.pid                AS waiting_pid,
+    other.locktype             AS other_locktype,
+    other.relation::regclass   AS other_table,
+    other_stm.current_query    AS other_query,
+    other.mode                 AS other_mode,
+    other.pid                  AS other_pid,
+    other.granted              AS other_granted
+FROM
+    pg_catalog.pg_locks AS waiting
+JOIN
+    pg_catalog.pg_stat_activity AS waiting_stm
+    ON (
+        waiting_stm.procpid = waiting.pid
+    )
+JOIN
+    pg_catalog.pg_locks AS other
+    ON (
+        (
+            waiting."database" = other."database"
+        AND waiting.relation  = other.relation
+        )
+        OR waiting.transactionid = other.transactionid
+    )
+JOIN
+    pg_catalog.pg_stat_activity AS other_stm
+    ON (
+        other_stm.procpid = other.pid
+    )
+WHERE
+    NOT waiting.granted
+AND
+    waiting.pid <> other.pid
+
+-- For PostgreSQL Version >= 9.2
+SELECT 
+    waiting.locktype           AS waiting_locktype,
+    waiting.relation::regclass AS waiting_table,
+    waiting_stm.query          AS waiting_query,
+    waiting.mode               AS waiting_mode,
+    waiting.pid                AS waiting_pid,
+    other.locktype             AS other_locktype,
+    other.relation::regclass   AS other_table,
+    other_stm.query            AS other_query,
+    other.mode                 AS other_mode,
+    other.pid                  AS other_pid,
+    other.granted              AS other_granted
+FROM
+    pg_catalog.pg_locks AS waiting
+JOIN
+    pg_catalog.pg_stat_activity AS waiting_stm
+    ON (
+        waiting_stm.pid = waiting.pid
+    )
+JOIN
+    pg_catalog.pg_locks AS other
+    ON (
+        (
+            waiting."database" = other."database"
+        AND waiting.relation  = other.relation
+        )
+        OR waiting.transactionid = other.transactionid
+    )
+JOIN
+    pg_catalog.pg_stat_activity AS other_stm
+    ON (
+        other_stm.pid = other.pid
+    )
+WHERE
+    NOT waiting.granted
+AND
+    waiting.pid <> other.pid
+
+--It would be useful to add extra columns indicating how long the waiting statement has been blocked.
+--Recursive View of Blocking
+
+WITH RECURSIVE
+     c(requested, current) AS
+       ( VALUES
+         ('AccessShareLock'::text, 'AccessExclusiveLock'::text),
+         ('RowShareLock'::text, 'ExclusiveLock'::text),
+         ('RowShareLock'::text, 'AccessExclusiveLock'::text),
+         ('RowExclusiveLock'::text, 'ShareLock'::text),
+         ('RowExclusiveLock'::text, 'ShareRowExclusiveLock'::text),
+         ('RowExclusiveLock'::text, 'ExclusiveLock'::text),
+         ('RowExclusiveLock'::text, 'AccessExclusiveLock'::text),
+         ('ShareUpdateExclusiveLock'::text, 'ShareUpdateExclusiveLock'::text),
+         ('ShareUpdateExclusiveLock'::text, 'ShareLock'::text),
+         ('ShareUpdateExclusiveLock'::text, 'ShareRowExclusiveLock'::text),
+         ('ShareUpdateExclusiveLock'::text, 'ExclusiveLock'::text),
+         ('ShareUpdateExclusiveLock'::text, 'AccessExclusiveLock'::text),
+         ('ShareLock'::text, 'RowExclusiveLock'::text),
+         ('ShareLock'::text, 'ShareUpdateExclusiveLock'::text),
+         ('ShareLock'::text, 'ShareRowExclusiveLock'::text),
+         ('ShareLock'::text, 'ExclusiveLock'::text),
+         ('ShareLock'::text, 'AccessExclusiveLock'::text),
+         ('ShareRowExclusiveLock'::text, 'RowExclusiveLock'::text),
+         ('ShareRowExclusiveLock'::text, 'ShareUpdateExclusiveLock'::text),
+         ('ShareRowExclusiveLock'::text, 'ShareLock'::text),
+         ('ShareRowExclusiveLock'::text, 'ShareRowExclusiveLock'::text),
+         ('ShareRowExclusiveLock'::text, 'ExclusiveLock'::text),
+         ('ShareRowExclusiveLock'::text, 'AccessExclusiveLock'::text),
+         ('ExclusiveLock'::text, 'RowShareLock'::text),
+         ('ExclusiveLock'::text, 'RowExclusiveLock'::text),
+         ('ExclusiveLock'::text, 'ShareUpdateExclusiveLock'::text),
+         ('ExclusiveLock'::text, 'ShareLock'::text),
+         ('ExclusiveLock'::text, 'ShareRowExclusiveLock'::text),
+         ('ExclusiveLock'::text, 'ExclusiveLock'::text),
+         ('ExclusiveLock'::text, 'AccessExclusiveLock'::text),
+         ('AccessExclusiveLock'::text, 'AccessShareLock'::text),
+         ('AccessExclusiveLock'::text, 'RowShareLock'::text),
+         ('AccessExclusiveLock'::text, 'RowExclusiveLock'::text),
+         ('AccessExclusiveLock'::text, 'ShareUpdateExclusiveLock'::text),
+         ('AccessExclusiveLock'::text, 'ShareLock'::text),
+         ('AccessExclusiveLock'::text, 'ShareRowExclusiveLock'::text),
+         ('AccessExclusiveLock'::text, 'ExclusiveLock'::text),
+         ('AccessExclusiveLock'::text, 'AccessExclusiveLock'::text)
+       ),
+     l AS
+       (
+         SELECT
+             (locktype,DATABASE,relation::regclass::text,page,tuple,virtualxid,transactionid,classid,objid,objsubid) AS target,
+             virtualtransaction,
+             pid,
+             mode,
+             granted
+           FROM pg_catalog.pg_locks
+       ),
+     t AS
+       (
+         SELECT
+             blocker.target  AS blocker_target,
+             blocker.pid     AS blocker_pid,
+             blocker.mode    AS blocker_mode,
+             blocked.target  AS target,
+             blocked.pid     AS pid,
+             blocked.mode    AS mode
+           FROM l blocker
+           JOIN l blocked
+             ON ( NOT blocked.granted
+              AND blocker.granted
+              AND blocked.pid != blocker.pid
+              AND blocked.target IS NOT DISTINCT FROM blocker.target)
+           JOIN c ON (c.requested = blocked.mode AND c.current = blocker.mode)
+       ),
+     r AS
+       (
+         SELECT
+             blocker_target,
+             blocker_pid,
+             blocker_mode,
+             '1'::int        AS depth,
+             target,
+             pid,
+             mode,
+             blocker_pid::text || ',' || pid::text AS seq
+           FROM t
+         UNION ALL
+         SELECT
+             blocker.blocker_target,
+             blocker.blocker_pid,
+             blocker.blocker_mode,
+             blocker.depth + 1,
+             blocked.target,
+             blocked.pid,
+             blocked.mode,
+             blocker.seq || ',' || blocked.pid::text
+           FROM r blocker
+           JOIN t blocked
+             ON (blocked.blocker_pid = blocker.pid)
+           WHERE blocker.depth < 1000
+       )
+SELECT * FROM r
+  ORDER BY seq;
