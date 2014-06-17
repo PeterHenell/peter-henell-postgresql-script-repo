@@ -61,4 +61,10 @@ emacs ~/.bashrc
 # at bottom add
 PATH=$PATH:/usr/pgsql-9.3/bin/
 export PATH
- 
+
+# in order to be able to install psycopg2 we need devel package installed
+cd /usr/local/bin/
+yum install postgresql94-devel
+
+# install psycopg2 using python 3.4
+sudo ./pip3.4 install psycopg2
