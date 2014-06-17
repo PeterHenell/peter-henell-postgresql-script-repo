@@ -55,4 +55,10 @@ sudo -u postgres psql
  tar -xvzf postgresql-9.3.3.tar.gz
  cd postgresql-9.3.3
 
+# to be able to reach pg utils from anywhere, also needed for psycopg2.
+# Add the executable path of postgres to the PATH
+emacs ~/.bashrc
+# at bottom add
+PATH=$PATH:/usr/pgsql-9.3/bin/
+export PATH
  
