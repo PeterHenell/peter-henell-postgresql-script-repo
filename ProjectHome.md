@@ -1,0 +1,1 @@
+Collection of my queries that I use to manage/query PostgreSQL databases.
